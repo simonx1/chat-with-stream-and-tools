@@ -1,24 +1,55 @@
 from openai import OpenAI
 import json
+import requests
+import os
 
 client = OpenAI()
 
-# Example dummy function hard coded to return the same weather
-# In production, this could be your backend API or an external API
-def get_current_weather(location, unit="fahrenheit"):
-    """Get the current weather in a given location"""
-    if "tokyo" in location.lower():
-        return json.dumps({"location": "Tokyo", "temperature": "10", "unit": unit})
-    elif "san francisco" in location.lower():
-        return json.dumps({"location": "San Francisco", "temperature": "32", "unit": unit})
-    elif "paris" in location.lower():
-        return json.dumps({"location": "Paris", "temperature": "22", "unit": unit})
-    else:
-        return json.dumps({"location": location, "temperature": "unknown"})
+def get_current_weather(location, unit='Celsius'):
+    # Retrieve the API key from the environment variable
+    api_key = os.getenv('OPENWEATHER_API_KEY')
+
+    # Base URL for the OpenWeather API
+    base_url = "https://api.openweathermap.org/data/2.5/weather?"
+
+    formatted_location = location.replace(" ", "+")
+
+    # Convert the unit parameter to the format required by the API
+    api_units = {'Celsius': 'metric', 'Fahrenheit': 'imperial', 'Kelvin': 'standard'}.get(unit, 'metric')
+
+    # Construct the full URL with parameters
+    full_url = f"{base_url}q={formatted_location}&units={api_units}&appid={api_key}"
+
+    try:
+        # Make the API call
+        response = requests.get(full_url)
+
+        # Check if the response is successful
+        if response.status_code == 200:
+            # Parse the JSON response
+            data = response.json()
+
+            # Extract and format the weather data
+            weather = {
+                'location': data['name'],
+                'temperature': data['main']['temp'],
+                'description': data['weather'][0]['description'],
+                'humidity': data['main']['humidity'],
+                'wind_speed': data['wind']['speed']
+            }
+            return json.dumps(weather)
+        else:
+            # Handle HTTP errors
+            print(f"Weather Error: {response.status_code} - {response.reason}")
+            return f"Weather Error: {response.status_code} - {response.reason}"
+    except requests.exceptions.RequestException as e:
+        # Handle exceptions in making the API request
+        print(f"Weather error occurred: {e}")
+        return f"Weather error occurred: {e}"
 
 def run_conversation():
     # Step 1: send the conversation and available functions to the model
-    messages = [{"role": "user", "content": "Tell me a joke and then tell me what's the weather like in San Francisco, Tokyo, and Paris?"}]
+    messages = [{"role": "user", "content": "Tell me a joke and then tell me what's the weather like in New York City, Tokyo, and Paris?"}]
     tools = [
         {
             "type": "function",
@@ -30,7 +61,7 @@ def run_conversation():
                     "properties": {
                         "location": {
                             "type": "string",
-                            "description": "The city and state, e.g. San Francisco, CA",
+                            "description": "The city and state, e.g. San Francisco",
                         },
                         "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
                     },
